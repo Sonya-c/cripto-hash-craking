@@ -74,7 +74,7 @@ class ParallelAtack:
         hash: str,
         salt: str) -> None:
 
-        num_processes = multiprocessing.cpu_count() - 1
+        num_processes = multiprocessing.cpu_count()
         chunks = np.array_split(plain_passwords, num_processes)
 
         print(f"num of process = {num_processes}")
