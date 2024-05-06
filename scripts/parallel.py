@@ -1,27 +1,17 @@
-import pandas as pd
-import timeit
-import multiprocessing
-
-from time import time
-
-from typing import List, Tuple, Dict 
-
-from Crypto.Hash import SHA3_512
-from Crypto.Protocol.KDF import PBKDF2
-
+import sys
 import multiprocessing
 from os import getpid 
-import numpy as np
+
+from time import time
+from Crypto.Hash import SHA3_512
 
 global plain_passwords
 plain_passwords = []
 
 with open("./data/rockyou.txt", "r", encoding="ISO-8859-1") as rockyou:
-    for plain in rockyou:
-        plain = plain.strip()
-        plain_passwords.append(plain)
-        
-print(f"Total passwords = {len(plain_passwords)}")
+  for plain in rockyou:
+    plain = plain.strip()
+    plain_passwords.append(plain)
 
 def H(data: str, salt: str = None, pepper: int = None) -> str:
   """Hash function using SHA3_512
@@ -59,73 +49,71 @@ def timer(f):
 # Definición de la clase
 class ParallelAtack:
 
-    @staticmethod
-    def _worker(
-        id: str,
-        hash: str,
-        salt: str,
-        found_event: multiprocessing.Event) -> None:
+  @staticmethod
+  def _worker(
+    id: str,
+    hash: str,
+    salt: str,
+    found_event: multiprocessing.Event) -> None:
+    
+    print(f"Start process {id} {[{getpid()}]}\n", flush=True)
+
+    chunk_size = len(plain_passwords) // multiprocessing.cpu_count()
+    start_index = id * chunk_size
+    end_index = (id + 1) * chunk_size if id < multiprocessing.cpu_count() - 1 else len(plain_passwords)
+    
+    # print(f"Process {id} {[{getpid()}]} | plan passwords head = {plain_passwords[start_index:start_index +10]}\n", flush=True)
+    
+    for pwd in plain_passwords[start_index:end_index]:
+        # if id == 3: print(pwd, flush=True)
         
-        print(f"Start process {id} {[{getpid()}]}\n")
+        for pepper in range(2**16):
+            if H(pwd, salt, pepper) == hash:
+                print(f"Finishing process {id} {[{getpid()}]} | Found {pwd} \n", flush=True)
+                found_event.set()
+                return pwd 
+            
+    print(f"Finishing process {id} {[{getpid()}]} | not found \n", flush=True)
 
-        chunk_size = len(plain_passwords) // multiprocessing.cpu_count()
-        start_index = id * chunk_size
-        end_index = (id + 1) * chunk_size if id < multiprocessing.cpu_count() - 1 else len(plain_passwords)
+  @timer
+  @staticmethod
+  def find(
+    hash: str,
+    salt: str) -> None:
 
-        for pwd in plain_passwords[start_index:end_index]:
-            for pepper in range(2**16):
-                if H(pwd, salt, pepper) == hash:
-                    print("Found ", pwd)
-                    found_event.set()
+    num_processes = multiprocessing.cpu_count()
 
+    print(f"num of process = {num_processes}")
 
-    @timer
-    @staticmethod
-    def find(
-        hash: str,
-        salt: str) -> None:
+    found_event = multiprocessing.Event()
 
-        num_processes = multiprocessing.cpu_count()
+    pool = [
+        multiprocessing.Process(
+            target=ParallelAtack._worker,
+            args=(i, hash, salt, found_event)
+        )
+        for i in range(num_processes)
+    ]
 
-        print(f"num of process = {num_processes}")
+    print("Starting process")
+    for p in pool: p.start()
+    
+    # block until condition met
+    found_event.wait()
 
-        found_event = multiprocessing.Event()
+    print("Terminate")
+    for p in pool: p.terminate()
 
-        pool = [
-            multiprocessing.Process(
-                target=ParallelAtack._worker,
-                args=(i, hash, salt, found_event)
-            )
-            for i in range(num_processes)
-        ]
-
-        print("Starting process")
-        for p in pool: p.start()
-        
-        # block until condition met
-        found_event.wait()
-
-        print("Terminate")
-        for p in pool: p.terminate()
-
-        print("Join process")
-        for p in pool: p.join()
+    print("Join process")
+    for p in pool: p.join()
 
 
 if __name__ == "__main__":
+	print(f"Total passwords = {len(plain_passwords)}")
+  
+	password, salt = sys.argv[1:]
 
-    filename = 'password_database_v3.csv'
-    USERNAMES = ['sonyac', 'awperez', 'mhiguita', 'cleonard'] 
-
-    db_v3 = pd.read_csv(f"data/{filename}")
-    db_v3 = db_v3[db_v3['username'].isin(USERNAMES)]
-
-    _, salt, _ = db_v3.iloc[1]
-    
-    username = input(f"Username | options = {USERNAMES} = ")    
-    username, salt, password = db_v3[db_v3["username"] == username].iloc[0]
-
-    # ParallelAtack.find(H('morelove3', salt, 123), salt)
-    
-    multiprocessing.set_start_method('spawn')  # Set start method to 'spawn'
-    ParallelAtack.find(password, salt)
+	print(password, salt)
+	
+	multiprocessing.set_start_method('spawn')  # Set start method to 'spawn'
+	ParallelAtack.find(password, salt)
