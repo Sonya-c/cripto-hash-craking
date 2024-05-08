@@ -116,10 +116,11 @@ if __name__ == "__main__":
       plain_passwords.append(plain)
 
   chunk_size = len(plain_passwords) // cluster_size
+
   start_index = cluster_id * chunk_size
   end_index = (cluster_id + 1) * chunk_size if cluster_id < cluster_size - 1 else len(plain_passwords)
 
   plain_passwords = plain_passwords[start_index:end_index]
-  print(f"Total passwords = {len(plain_passwords)}")
+  print(f"Total passwords = {len(plain_passwords)}", flush=True)
 
   ParallelAtack.find(plain_passwords, password, salt)
